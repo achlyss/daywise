@@ -1,0 +1,14 @@
+# Daywise
+# NOTE: js/firebase-config.js ships with PLACEHOLDER values and MUST stay
+# that way in the public repo (the contest forbids production API keys in
+# the repository). Fill in your real config only in your local copy and in
+# the Firebase Hosting deploy — never commit the filled-in file. If you
+# edited it locally, restore the placeholders before `git push`
+# (or: git checkout -- js/firebase-config.js).
+.DS_Store
+Thumbs.db
+*.log
+
+# Working notes — never in the repo (the repo may go public for Devpost)
+ENTRY.md
+DEMO-SCRIPT.md

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daywise — A private journal that thinks on-device first</title>
+<meta name="description" content="Daywise is a private daily journal. Short reflections are understood on-device with Gemini Nano; weekly patterns are drawn in the cloud from on-device summaries only — your raw entries never leave this device. Built with Firebase AI Logic hybrid inference.">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☀️</text></svg>">
+<script type="importmap">
+{
+  "imports": {
+    "firebase/app": "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js",
+    "firebase/ai": "https://www.gstatic.com/firebasejs/13.4.0/firebase-ai.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js",
+    "firebase/remote-config": "https://www.gstatic.com/firebasejs/13.4.0/firebase-remote-config.js",
+    "firebase/app-check": "https://www.gstatic.com/firebasejs/13.4.0/firebase-app-check.js"
+  }
+}
+</script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">☀️</span>
+    <div>
+      <h1>Daywise</h1>
+      <p class="tagline">A private journal that thinks on-device first</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span id="ai-status" class="pill pill-muted" title="Hybrid inference status">AI: starting…</span>
+    <span id="sync-status" class="pill pill-muted" title="Storage status">Storage: local</span>
+    <button id="btn-settings" class="btn btn-ghost" type="button" aria-label="Settings">⚙️ Settings</button>
+  </div>
+</header>
+
+<div id="setup-banner" class="banner" hidden>
+  <strong>Demo mode.</strong>
+  Firebase is not configured yet, so journaling works locally on this device and AI features are paused.
+  <button id="btn-setup-how" class="btn btn-small" type="button">How to connect Firebase</button>
+</div>
+
+<nav class="tabs" aria-label="Main views">
+  <button class="tab active" data-view="today" type="button">✍️ Today</button>
+  <button class="tab" data-view="journal" type="button">📖 Journal <span id="count-badge" class="count-badge" hidden>0</span></button>
+  <button class="tab" data-view="insights" type="button">🔍 Insights</button>
+</nav>
+
+<main>
+  <!-- ============ TODAY ============ -->
+  <section id="view-today" class="view active">
+    <div class="card prompt-card">
+      <p class="eyebrow">Prompt of the day</p>
+      <p id="daily-prompt" class="prompt-text">What is one small thing that went right today?</p>
+      <p class="prompt-source" id="prompt-source">Built-in prompt · Remote Config will replace this once Firebase is connected.</p>
+    </div>
+
+    <div class="card composer-card">
+      <label for="entry-text" class="eyebrow">How was your day?</label>
+      <textarea id="entry-text" rows="6" maxlength="5000" placeholder="Write freely. This stays on your device unless you ask the cloud for a weekly insight — and even then, only the on-device summary travels, never your raw words."></textarea>
+      <div class="composer-row">
+        <div class="mood-picker" role="group" aria-label="How do you feel? (optional)">
+          <span class="mood-label">Feeling:</span>
+          <button type="button" class="mood-chip" data-mood="joyful">😄 Joyful</button>
+          <button type="button" class="mood-chip" data-mood="calm">😌 Calm</button>
+          <button type="button" class="mood-chip" data-mood="grateful">🙏 Grateful</button>
+          <button type="button" class="mood-chip" data-mood="tired">😴 Tired</button>
+          <button type="button" class="mood-chip" data-mood="anxious">😟 Anxious</button>
+          <button type="button" class="mood-chip" data-mood="sad">😢 Sad</button>
+          <button type="button" class="mood-chip" data-mood="angry">😠 Angry</button>
+        </div>
+        <span id="char-count" class="char-count">0 / 5000</span>
+      </div>
+      <div class="composer-actions">
+        <button id="btn-save" class="btn btn-primary" type="button">Save entry</button>
+        <button id="btn-save-ai" class="btn btn-accent" type="button" title="Save, then let the on-device model understand it (mood, tags, one-line summary)">
+          ✨ Save &amp; understand on-device
+        </button>
+      </div>
+      <p class="hint">“Understand on-device” runs Gemini Nano in this browser when available — private, instant, offline — and falls back to the cloud only if no on-device model exists.</p>
+      <div id="device-model-progress" class="progress-wrap" hidden>
+        <div class="progress-bar"><div id="device-model-bar" class="progress-fill" style="width:0%"></div></div>
+        <p id="device-model-label" class="progress-label">Preparing on-device model…</p>
+      </div>
+    </div>
+
+    <div class="card privacy-card">
+      <h2>Why hybrid? Your words stay yours.</h2>
+      <ol class="privacy-list">
+        <li><strong>On-device first.</strong> Mood, tags and a one-line summary are computed by Gemini Nano <em>in this browser</em>. The raw text of your entry never leaves the device for these tasks.</li>
+        <li><strong>Cloud only for the big picture.</strong> The weekly insight is generated in the cloud — but only from the short on-device summaries, never from your raw entries.</li>
+        <li><strong>You choose.</strong> In Settings you can force on-device only, cloud only, or let Daywise decide per task.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============ JOURNAL ============ -->
+  <section id="view-journal" class="view">
+    <div class="toolbar">
+      <input id="search-input" type="search" placeholder="Search your entries…" aria-label="Search entries">
+      <select id="filter-mood" aria-label="Filter by mood">
+        <option value="">All moods</option>
+        <option value="joyful">😄 Joyful</option>
+        <option value="calm">😌 Calm</option>
+        <option value="grateful">🙏 Grateful</option>
+        <option value="hopeful">🌱 Hopeful</option>
+        <option value="tired">😴 Tired</option>
+        <option value="anxious">😟 Anxious</option>
+        <option value="sad">😢 Sad</option>
+        <option value="angry">😠 Angry</option>
+        <option value="overwhelmed">😵 Overwhelmed</option>
+        <option value="neutral">😐 Neutral</option>
+      </select>
+    </div>
+    <p id="empty-journal" class="empty-state">No entries yet. Write your first one in <strong>Today</strong> — even two honest sentences count.</p>
+    <div id="entries-list" class="entries-list"></div>
+  </section>
+
+  <!-- ============ INSIGHTS ============ -->
+  <section id="view-insights" class="view">
+    <div class="card">
+      <h2>This week at a glance</h2>
+      <div class="stats-grid">
+        <div class="stat"><span id="stat-entries" class="stat-num">0</span><span class="stat-label">entries</span></div>
+        <div class="stat"><span id="stat-streak" class="stat-num">0</span><span class="stat-label">day streak</span></div>
+        <div class="stat"><span id="stat-top-mood" class="stat-num stat-text">—</span><span class="stat-label">most frequent mood</span></div>
+        <div class="stat"><span id="stat-words" class="stat-num">0</span><span class="stat-label">words written</span></div>
+      </div>
+      <div id="mood-bars" class="mood-bars"></div>
+    </div>
+
+    <div class="card">
+      <h2>Weekly insight</h2>
+      <p class="hint">Generated in the cloud from your <strong>on-device summaries only</strong> — your raw entries never leave this device. Streaming, so you can watch it think.</p>
+      <div class="insight-actions">
+        <button id="btn-weekly" class="btn btn-accent" type="button">✨ Generate weekly insight</button>
+        <span id="weekly-meta" class="hint"></span>
+      </div>
+      <div id="weekly-result" class="insight-result" aria-live="polite">
+        <p class="empty-state">No weekly insight yet. Write at least one entry, then generate it here.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>AI activity</h2>
+      <p class="hint">Every AI call Daywise makes, with where it ran and how long it took. This is how you can see hybrid inference working.</p>
+      <ul id="ai-log" class="ai-log">
+        <li class="ai-log-empty">No AI calls yet.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<!-- ============ SETTINGS MODAL ============ -->
+<div id="settings-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="settings-title">Settings</h2>
+      <button id="btn-close-settings" class="btn btn-ghost" type="button" aria-label="Close settings">✕</button>
+    </div>
+
+    <h3>Inference mode</h3>
+    <div class="radio-group" id="mode-group">
+      <label><input type="radio" name="inference-mode" value="auto" checked> <strong>Auto (recommended)</strong> — on-device first, cloud fallback. The hybrid default.</label>
+      <label><input type="radio" name="inference-mode" value="private"> <strong>Private</strong> — on-device only. Fails honestly if no on-device model is available.</label>
+      <label><input type="radio" name="inference-mode" value="deep"> <strong>Deep</strong> — cloud first, on-device fallback. Best quality, least private.</label>
+      <label><input type="radio" name="inference-mode" value="cloud"> <strong>Cloud only</strong> — always Gemini in the cloud.</label>
+    </div>
+
+    <h3>Weekly insight</h3>
+    <label class="check-row"><input type="checkbox" id="opt-cloud-insights" checked> Allow weekly insights (uses on-device summaries only, never raw entries)</label>
+
+    <h3>Firebase status</h3>
+    <dl class="status-list" id="firebase-status">
+      <div><dt>Configuration</dt><dd id="st-config">Not configured (demo mode)</dd></div>
+      <div><dt>Authentication</dt><dd id="st-auth">—</dd></div>
+      <div><dt>App Check</dt><dd id="st-appcheck">—</dd></div>
+      <div><dt>On-device model</dt><dd id="st-device">Unknown — open this page in Chrome 139+ on desktop</dd></div>
+      <div><dt>Cloud model</dt><dd id="st-cloud">Gemini 2.5 Flash-Lite (fallback) · Gemini 2.5 Flash (weekly)</dd></div>
+    </dl>
+
+    <h3>Your data</h3>
+    <div class="data-actions">
+      <button id="btn-export" class="btn" type="button">⬇️ Export entries (.json)</button>
+      <button id="btn-erase" class="btn btn-danger" type="button">🗑️ Erase all entries</button>
+    </div>
+
+    <h3>Connect Firebase</h3>
+    <p class="hint">AI features need a Firebase project. The full step-by-step is in the README (section “Connect Firebase”). In short: create a project in the Firebase console → enable AI Logic (Gemini Developer API) → enable Anonymous sign-in, Firestore, Remote Config and App Check → paste the web config into <code>js/firebase-config.js</code>.</p>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
